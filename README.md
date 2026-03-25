@@ -111,14 +111,14 @@ N, K = Z_gt.shape
 # Train
 model = NOCD(num_communities=K, model_type='gcn', hidden_dims=(128,), batch_norm=True)
 model.fit(A, X, y=Z_gt)
-model.save('checkpoints/nocd_model.pt')
+model.save('checkpoints/nocd-gcn-X.pt')
 
 # Predict (same or new graph)
 Z_binary = model.predict(A, X)      # binary community assignments
 Z_soft = model.predict_proba(A, X)  # soft membership scores
 
 # Load a saved model for prediction only
-model = NOCD.load('checkpoints/nocd_model.pt')
+model = NOCD.load('checkpoints/nocd-gcn-X.pt')
 Z_binary = model.predict(A, X)
 
 # Evaluate
@@ -134,18 +134,37 @@ Included in `data/`:
 - **Facebook Ego Networks** (`data/facebook_ego/`)
 - **Microsoft Academic Graph**: `mag_cs.npz`, `mag_chem.npz`, `mag_eng.npz`, `mag_med.npz`
 
-## Pretrained Checkpoint
+## Pretrained Checkpoints
 
-A pretrained checkpoint (`checkpoints/nocd_model.pt`) is included, trained on `data/mag_cs.npz` with:
+Six pretrained checkpoints are provided in `checkpoints/`, covering all
+combinations of model type and feature type. Each checkpoint has an
+accompanying [ML Croissant](https://mlcommons.org/working-groups/data/croissant/)
+JSON-LD metadata file.
 
-```
-nocd-train --dataset data/mag_cs.npz --model gcn --batch-norm --hidden-dims 128 \
-    --features X --dropout 0.5 --lr 1e-3 --weight-decay 1e-2 \
-    --max-epochs 500 --patience 10 --balance-loss --stochastic-loss \
-    --batch-size 20000
-```
+Naming scheme: `nocd-{model}-{features}[-k{n_components}].pt`
 
-Device: MPS (Apple Silicon), Python 3.14, PyTorch 2.11, PyG 2.7. Best NMI: ~0.47.
+| Checkpoint | Model | Features | NMI | Coverage | Conductance |
+|---|---|---|---|---|---|
+| `nocd-gcn-X.pt` | GCN + BatchNorm | Node attributes (X) | **0.48** | 0.93 | 0.22 |
+| `nocd-gcn-spectral-k32.pt` | GCN + BatchNorm | Spectral (k=32) | 0.09 | 0.32 | 0.38 |
+| `nocd-gcn-structural.pt` | GCN + BatchNorm | Structural (9-dim) | 0.00 | 0.85 | 0.35 |
+| `nocd-improved-X.pt` | ImprovedGCN | Node attributes (X) | 0.27 | 0.81 | 0.26 |
+| `nocd-improved-spectral-k32.pt` | ImprovedGCN | Spectral (k=32) | 0.00 | 0.20 | 0.65 |
+| `nocd-improved-structural.pt` | ImprovedGCN | Structural (9-dim) | 0.00 | 0.89 | 0.06 |
+
+All trained on `data/mag_cs.npz` (21,957 nodes, 193,500 edges, 18 communities).
+Device: MPS (Apple Silicon), Python 3.14, PyTorch 2.11, PyG 2.7.
+
+**Key findings:**
+- GCN + BatchNorm with node attributes achieves the best NMI (~0.48), matching the original paper
+- Structural and spectral features find real community structure (high coverage) but the
+  communities don't align with ground-truth labels (low NMI) — this is expected since
+  topology-only features lack the domain-specific signal in the keyword attributes
+- The `structural` and `spectral` feature types enable cross-graph transfer (fixed input dim)
+- Coverage and conductance show the models are finding meaningful graph partitions
+  even when NMI is low
+
+To regenerate all checkpoints: `uv run python scripts/train_all_checkpoints.py`
 
 ## Cite
 
