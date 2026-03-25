@@ -28,7 +28,7 @@ Key options:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--dataset` | `data/mag_cs.npz` | Path to dataset `.npz` file |
-| `--model` | `improved` | GNN variant: `improved` or `gcn` |
+| `--model` | `gcn` | GNN variant: `gcn` (with batch norm) or `improved` |
 | `--hidden-dims` | `128` | Hidden layer sizes (space-separated) |
 | `--features` | `X` | Input features: `X` (attributes), `A` (adjacency), `AX` (both) |
 | `--lr` | `1e-3` | Learning rate |
@@ -109,7 +109,7 @@ A, X, Z_gt = graph['A'], graph['X'], graph['Z']
 N, K = Z_gt.shape
 
 # Train
-model = NOCD(num_communities=K, model_type='improved', hidden_dims=(128,))
+model = NOCD(num_communities=K, model_type='gcn', hidden_dims=(128,), batch_norm=True)
 model.fit(A, X, y=Z_gt)
 model.save('checkpoints/nocd_model.pt')
 
@@ -139,13 +139,13 @@ Included in `data/`:
 A pretrained checkpoint (`checkpoints/nocd_model.pt`) is included, trained on `data/mag_cs.npz` with:
 
 ```
-nocd-train --dataset data/mag_cs.npz --model improved --hidden-dims 128 \
+nocd-train --dataset data/mag_cs.npz --model gcn --batch-norm --hidden-dims 128 \
     --features X --dropout 0.5 --lr 1e-3 --weight-decay 1e-2 \
     --max-epochs 500 --patience 10 --balance-loss --stochastic-loss \
     --batch-size 20000
 ```
 
-Device: MPS (Apple Silicon), Python 3.14, PyTorch 2.11, PyG 2.7. Best NMI: ~0.32.
+Device: MPS (Apple Silicon), Python 3.14, PyTorch 2.11, PyG 2.7. Best NMI: ~0.47.
 
 ## Cite
 

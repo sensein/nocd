@@ -17,12 +17,12 @@ def train_main():
     parser = argparse.ArgumentParser(description='Train NOCD model')
     parser.add_argument('--dataset', type=str, default='data/mag_cs.npz',
                         help='Path to dataset .npz file')
-    parser.add_argument('--model', type=str, default='improved', choices=['gcn', 'improved'],
+    parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'improved'],
                         help='GNN model type')
     parser.add_argument('--hidden-dims', type=int, nargs='+', default=[128],
                         help='Hidden layer dimensions')
     parser.add_argument('--dropout', type=float, default=0.5)
-    parser.add_argument('--batch-norm', action='store_true')
+    parser.add_argument('--batch-norm', action='store_true', default=True)
     parser.add_argument('--layer-norm', action='store_true')
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--weight-decay', type=float, default=1e-2)
