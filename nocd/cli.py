@@ -3,9 +3,6 @@
 import argparse
 import json
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 import numpy as np
 
 from nocd import data as data_mod
@@ -145,6 +142,10 @@ def predict_main():
 
 
 def visualize_main():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
     parser = argparse.ArgumentParser(description='Visualize community detection results')
     parser.add_argument('--graph', type=str, required=True, help='Path to graph .npz file')
     parser.add_argument('--predictions', type=str, default=None,
