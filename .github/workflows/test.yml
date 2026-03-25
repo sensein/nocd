@@ -1,0 +1,107 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Create venv and install
+        run: |
+          uv venv --python ${{ matrix.python-version }}
+          uv pip install -e .
+
+      - name: Test import
+        run: uv run python -c "from nocd import NOCD; print('NOCD imported successfully')"
+
+      - name: Test data loading
+        run: uv run python -c "
+          from nocd.data import load_dataset, load_graph, prepare_features
+          g = load_dataset('data/mag_cs.npz')
+          A, X, Z = g['A'], g['X'], g['Z']
+          print(f'Nodes: {A.shape[0]}, Features: {X.shape[1]}, Communities: {Z.shape[1]}')
+          A2, X2, Z2 = load_graph('data/mag_cs.npz')
+          assert A2.shape == A.shape
+          x = prepare_features(A, X, 'X')
+          print(f'Feature tensor shape: {x.shape}')
+          "
+
+      - name: Test model construction
+        run: uv run python -c "
+          from nocd.nn import build_gnn, build_edge_index, infer
+          from nocd.data import load_dataset, prepare_features
+          g = load_dataset('data/mag_cs.npz')
+          A, X, Z = g['A'], g['X'], g['Z']
+          x = prepare_features(A, X, 'X')
+          gnn = build_gnn('improved', x.shape[1], [64], Z.shape[1])
+          ei, ew = build_edge_index('improved', A)
+          z = infer(gnn, x, ei, ew)
+          print(f'Output shape: {z.shape}')
+          assert z.shape == Z.shape
+          "
+
+      - name: Test NOCD fit (short)
+        run: uv run python -c "
+          from nocd import NOCD
+          from nocd.data import load_dataset
+          g = load_dataset('data/mag_cs.npz')
+          A, X, Z = g['A'], g['X'], g['Z']
+          model = NOCD(num_communities=Z.shape[1], max_epochs=5, display_step=1, patience=50)
+          model.fit(A, X, y=Z)
+          Z_pred = model.predict(A, X)
+          Z_soft = model.predict_proba(A, X)
+          print(f'Predict shape: {Z_pred.shape}, Proba shape: {Z_soft.shape}')
+          assert Z_pred.shape == Z.shape
+          "
+
+      - name: Test save/load
+        run: uv run python -c "
+          from nocd import NOCD
+          from nocd.data import load_dataset
+          import numpy as np
+          g = load_dataset('data/mag_cs.npz')
+          A, X, Z = g['A'], g['X'], g['Z']
+          model = NOCD(num_communities=Z.shape[1], max_epochs=5, display_step=1, patience=50)
+          model.fit(A, X, verbose=False)
+          model.save('/tmp/test_model.pt')
+          model2 = NOCD.load('/tmp/test_model.pt')
+          z1 = model.predict_proba(A, X)
+          z2 = model2.predict_proba(A, X)
+          assert np.allclose(z1, z2, atol=1e-5), 'Save/load predictions differ'
+          print('Save/load test passed')
+          "
+
+      - name: Test metrics
+        run: uv run python -c "
+          from nocd.metrics import overlapping_nmi, symmetric_jaccard, evaluate_unsupervised
+          from nocd.data import load_dataset
+          import numpy as np
+          g = load_dataset('data/mag_cs.npz')
+          Z = g['Z']
+          nmi = overlapping_nmi(Z, Z)
+          print(f'Self-NMI: {nmi:.4f}')
+          assert nmi > 0.99
+          jac = symmetric_jaccard(Z, Z)
+          print(f'Self-Jaccard: {jac:.4f}')
+          assert jac > 0.99
+          A = g['A']
+          m = evaluate_unsupervised(Z, A)
+          print(f'Unsupervised metrics: {m}')
+          "

@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.distributions as td
 
 
@@ -27,34 +26,15 @@ class BernoulliDecoder(nn.Module):
         self.balance_loss = balance_loss
 
     def forward_batch(self, emb, idx):
-        """Compute probabilities of given edges.
-
-        Args:
-            emb: embedding matrix, shape (num_nodes, emb_dim)
-            idx: edge indices, shape (batch_size, 2)
-
-        Returns:
-            edge_probs: Bernoulli distribution for given edges, shape (batch_size)
-        """
         raise NotImplementedError
 
     def forward_full(self, emb):
-        """Compute probabilities for all edges.
-
-        Args:
-            emb: embedding matrix, shape (num_nodes, emb_dim)
-
-        Returns:
-            edge_probs: Bernoulli distribution for all edges, shape (num_nodes, num_nodes)
-        """
         raise NotImplementedError
 
     def loss_batch(self, emb, ones_idx, zeros_idx):
-        """Compute loss for given edges and non-edges."""
         raise NotImplementedError
 
     def loss_full(self, emb, adj):
-        """Compute loss for all edges and non-edges."""
         raise NotImplementedError
 
 
@@ -65,15 +45,6 @@ class BerpoDecoder(BernoulliDecoder):
         self.eps = -np.log(1 - edge_proba)
 
     def forward_batch(self, emb, idx):
-        """Compute probabilities of given edges.
-
-        Args:
-            emb: embedding matrix, shape (num_nodes, emb_dim)
-            idx: edge indices, shape (batch_size, 2)
-
-        Returns:
-            edge_probs: Bernoulli distribution for given edges, shape (batch_size)
-        """
         e1, e2 = idx.t()
         logits = torch.sum(emb[e1] * emb[e2], dim=1)
         logits += self.eps
@@ -81,14 +52,6 @@ class BerpoDecoder(BernoulliDecoder):
         return td.Bernoulli(probs=probs)
 
     def forward_full(self, emb):
-        """Compute probabilities for all edges.
-
-        Args:
-            emb: embedding matrix, shape (num_nodes, emb_dim)
-
-        Returns:
-            edge_probs: Bernoulli distribution for all edges, shape (num_nodes, num_nodes)
-        """
         logits = emb @ emb.t()
         logits += self.eps
         probs = 1 - torch.exp(-logits)
@@ -96,12 +59,10 @@ class BerpoDecoder(BernoulliDecoder):
 
     def loss_batch(self, emb, ones_idx, zeros_idx):
         """Compute BerPo loss for a batch of edges and non-edges."""
-        # Loss for edges
         e1, e2 = ones_idx[:, 0], ones_idx[:, 1]
         edge_dots = torch.sum(emb[e1] * emb[e2], dim=1)
         loss_edges = -torch.mean(torch.log(-torch.expm1(-self.eps - edge_dots)))
 
-        # Loss for non-edges
         ne1, ne2 = zeros_idx[:, 0], zeros_idx[:, 1]
         loss_nonedges = torch.mean(torch.sum(emb[ne1] * emb[ne2], dim=1))
         if self.balance_loss:
@@ -113,10 +74,12 @@ class BerpoDecoder(BernoulliDecoder):
     def loss_full(self, emb, adj):
         """Compute BerPo loss for all edges & non-edges in a graph."""
         e1, e2 = adj.nonzero()
+        e1 = torch.as_tensor(np.asarray(e1).ravel(), dtype=torch.long, device=emb.device)
+        e2 = torch.as_tensor(np.asarray(e2).ravel(), dtype=torch.long, device=emb.device)
+
         edge_dots = torch.sum(emb[e1] * emb[e2], dim=1)
         loss_edges = -torch.sum(torch.log(-torch.expm1(-self.eps - edge_dots)))
 
-        # Correct for overcounting F_u * F_v for edges and nodes with themselves
         self_dots_sum = torch.sum(emb * emb)
         correction = self_dots_sum + torch.sum(edge_dots)
         sum_emb = torch.sum(emb, dim=0, keepdim=True).t()
