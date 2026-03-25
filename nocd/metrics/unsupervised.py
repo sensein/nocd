@@ -49,7 +49,7 @@ def coverage(Z_pred, adj):
 
 
 def density(Z_pred, adj):
-    """Average density of communities (weighted by size).
+    r"""Average density of communities (weighted by size).
 
     Higher is better.
 
@@ -73,7 +73,7 @@ def density(Z_pred, adj):
 
 
 def conductance(Z_pred, adj):
-    """Compute weight average of conductances of communities.
+    r"""Compute weight average of conductances of communities.
 
     Conductance of each community is weighted by its size.
 

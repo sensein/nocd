@@ -5,6 +5,12 @@
 __pycache__
 .idea
 .vscode
+.venv/
+.DS_Store
+uv.lock
+predictions*.npz
+predictions*.json
+communities.png
 
 
 # Latex

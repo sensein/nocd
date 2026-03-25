@@ -1,5 +1,4 @@
 import numpy as np
-import scipy.sparse as sp
 import torch
 import torch.utils.data as data_utils
 
@@ -8,7 +7,7 @@ class EdgeSampler(data_utils.Dataset):
     """Sample edges and non-edges uniformly from a graph.
 
     Args:
-        A: adjacency matrix.
+        A: adjacency matrix (scipy sparse).
         num_pos: number of edges per batch.
         num_neg: number of non-edges per batch.
     """
@@ -21,16 +20,15 @@ class EdgeSampler(data_utils.Dataset):
         self.num_edges = self.edges.shape[0]
 
     def __getitem__(self, key):
-        np.random.seed(key)
-        edges_idx = np.random.randint(0, self.num_edges, size=self.num_pos, dtype=np.int64)
+        rng = np.random.RandomState(key)
+        edges_idx = rng.randint(0, self.num_edges, size=self.num_pos, dtype=np.int64)
         next_edges = self.edges[edges_idx, :]
 
-        # Select num_neg non-edges
         generated = False
         while not generated:
-            candidate_ne = np.random.randint(0, self.num_nodes, size=(2*self.num_neg, 2), dtype=np.int64)
+            candidate_ne = rng.randint(0, self.num_nodes, size=(2*self.num_neg, 2), dtype=np.int64)
             cne1, cne2 = candidate_ne[:, 0], candidate_ne[:, 1]
-            to_keep = (1 - self.A[cne1, cne2]).astype(np.bool).A1 * (cne1 != cne2)
+            to_keep = np.asarray((1 - self.A[cne1, cne2])).astype(bool).ravel() * (cne1 != cne2)
             next_nonedges = candidate_ne[to_keep][:self.num_neg]
             generated = to_keep.sum() >= self.num_neg
         return torch.LongTensor(next_edges), torch.LongTensor(next_nonedges)
