@@ -8,7 +8,8 @@ project:
     - file: docs/original_demo.ipynb
     - file: docs/features_demo.ipynb
   execute:
-    enabled: false
+    enabled: true
+    timeout: 600
 
 site:
   template: book-theme

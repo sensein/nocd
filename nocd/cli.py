@@ -39,8 +39,8 @@ def train_main():
     parser.add_argument('--n-components', type=int, default=16,
                         help='Number of spectral components (only for --features spectral)')
     parser.add_argument('--threshold', type=float, default=0.5)
-    parser.add_argument('--output', type=str, default='checkpoints/nocd_model.pt',
-                        help='Output checkpoint path')
+    parser.add_argument('--output', type=str, default=None,
+                        help='Output checkpoint path (default: checkpoints/nocd-{model}-{features}.pt)')
     args = parser.parse_args()
 
     # Load dataset
@@ -71,8 +71,15 @@ def train_main():
         threshold=args.threshold,
     )
     model.fit(A, X, y=Z_gt)
-    model.save(args.output)
-    print(f"Model saved to {args.output}")
+
+    output = args.output
+    if output is None:
+        name = f"nocd-{args.model}-{args.features}"
+        if args.features == 'spectral':
+            name += f"-k{args.n_components}"
+        output = f"checkpoints/{name}.pt"
+    model.save(output)
+    print(f"Model saved to {output}")
 
 
 def predict_main():

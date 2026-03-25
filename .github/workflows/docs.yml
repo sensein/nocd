@@ -19,13 +19,13 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Set up Python
-        run: uv python install 3.12
+        run: uv python install 3.14
 
       - name: Create venv and install
         run: |
-          uv venv --python 3.12
+          uv venv --python 3.14
           uv pip install -e .
-          uv pip install "jupyter-book>=2"
+          uv pip install "jupyter-book>=2" ipykernel
 
       - name: Build Jupyter Book
         run: uv run jupyter-book build --html --ci
