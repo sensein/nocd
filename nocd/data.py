@@ -123,7 +123,7 @@ def load_features(path):
     -------
     X : sp.csr_matrix
     """
-    data = _np_load(path)
+    data = np.load(path, allow_pickle=True)
     if 'attr_matrix.data' in data:
         return _load_sparse_csr(data, 'attr_matrix')
     if 'X' in data:
@@ -132,7 +132,7 @@ def load_features(path):
     raise ValueError(f"Cannot load features from {path}")
 
 
-def prepare_features(A, X=None, feature_type='X', device=None):
+def prepare_features(A, X=None, feature_type='X', device=None, **transformer_kwargs):
     """Normalize features and convert to a dense tensor.
 
     Parameters
@@ -142,27 +142,39 @@ def prepare_features(A, X=None, feature_type='X', device=None):
     X : sp.spmatrix or None
         Node attribute matrix.
     feature_type : str
-        One of 'X' (attributes), 'A' (adjacency), 'AX' (both).
+        One of 'X' (attributes), 'A' (adjacency), 'AX' (both),
+        'structural' (graph topology features), 'spectral' (Laplacian eigenvectors).
     device : torch.device or None
+    **transformer_kwargs :
+        Passed to StructuralFeatures or SpectralFeatures (e.g. n_components=32).
 
     Returns
     -------
     x_dense : torch.Tensor
         Dense feature tensor on the specified device.
     """
-    if X is not None and feature_type in ('X', 'AX'):
+    if feature_type == 'structural':
+        from nocd.features import StructuralFeatures
+        include_x = X is not None and transformer_kwargs.pop('include_x', False)
+        tf = StructuralFeatures(include_x=include_x, **transformer_kwargs)
+        x_np = tf.fit_transform(A, X)
+        x_dense = torch.FloatTensor(x_np)
+    elif feature_type == 'spectral':
+        from nocd.features import SpectralFeatures
+        include_x = X is not None and transformer_kwargs.pop('include_x', False)
+        tf = SpectralFeatures(include_x=include_x, **transformer_kwargs)
+        x_np = tf.fit_transform(A, X)
+        x_dense = torch.FloatTensor(x_np)
+    elif X is not None and feature_type in ('X', 'AX'):
         x_norm = normalize(X)
         if feature_type == 'AX':
             x_norm = sp.hstack([x_norm, normalize(A)])
+        x_dense = torch.FloatTensor(x_norm.toarray() if sp.issparse(x_norm) else x_norm)
     else:
         if feature_type == 'X' and X is None:
             warnings.warn("Model expects node features (X) but none available. Using adjacency.")
         x_norm = normalize(A)
-
-    if sp.issparse(x_norm):
-        x_dense = torch.FloatTensor(x_norm.toarray())
-    else:
-        x_dense = torch.FloatTensor(x_norm)
+        x_dense = torch.FloatTensor(x_norm.toarray() if sp.issparse(x_norm) else x_norm)
 
     if device is not None:
         x_dense = x_dense.to(device)

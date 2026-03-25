@@ -33,7 +33,10 @@ class NOCD(BaseEstimator):
     hidden_dims : list of int, default=(128,)
         Hidden layer sizes.
     feature_type : str, default='X'
-        Input features: 'X' (attributes), 'A' (adjacency), 'AX' (both).
+        Input features: 'X' (attributes), 'A' (adjacency), 'AX' (both),
+        'structural' (topology features), 'spectral' (Laplacian eigenvectors).
+    n_components : int, default=16
+        Number of spectral components (only used when feature_type='spectral').
     dropout : float, default=0.5
         Dropout rate.
     lr : float, default=1e-3
@@ -79,6 +82,7 @@ class NOCD(BaseEstimator):
         model_type='improved',
         hidden_dims=(128,),
         feature_type='X',
+        n_components=16,
         dropout=0.5,
         lr=1e-3,
         weight_decay=1e-2,
@@ -97,6 +101,7 @@ class NOCD(BaseEstimator):
         self.model_type = model_type
         self.hidden_dims = hidden_dims
         self.feature_type = feature_type
+        self.n_components = n_components
         self.dropout = dropout
         self.lr = lr
         self.weight_decay = weight_decay
@@ -115,6 +120,12 @@ class NOCD(BaseEstimator):
         if self.device is not None:
             return torch.device(self.device)
         return utils.get_device()
+
+    def _feature_kwargs(self):
+        """Extra kwargs for prepare_features based on feature_type."""
+        if self.feature_type == 'spectral':
+            return {'n_components': self.n_components}
+        return {}
 
     def fit(self, A, X=None, y=None, verbose=True):
         """Fit the NOCD model.
@@ -142,7 +153,8 @@ class NOCD(BaseEstimator):
         hidden_dims = list(self.hidden_dims)
 
         # Prepare features
-        x_dense = data_mod.prepare_features(A, X, self.feature_type, device=device)
+        x_dense = data_mod.prepare_features(A, X, self.feature_type, device=device,
+                                             **self._feature_kwargs())
         self.n_features_in_ = x_dense.shape[1]
 
         # Build model
@@ -257,7 +269,8 @@ class NOCD(BaseEstimator):
         """
         self._check_is_fitted()
         device = self._get_device()
-        x_dense = data_mod.prepare_features(A, X, self.feature_type, device=device)
+        x_dense = data_mod.prepare_features(A, X, self.feature_type, device=device,
+                                             **self._feature_kwargs())
         edge_index, edge_weight = build_edge_index(self.model_type, A, device=device)
         self.gnn_ = self.gnn_.to(device)
         return infer(self.gnn_, x_dense, edge_index, edge_weight)
@@ -306,6 +319,7 @@ class NOCD(BaseEstimator):
             'layer_norm': bool(self.layer_norm),
             'balance_loss': bool(self.balance_loss),
             'features': self.feature_type,
+            'n_components': int(self.n_components),
             'threshold': float(self.threshold),
         }
         torch.save(checkpoint, path)
@@ -334,6 +348,7 @@ class NOCD(BaseEstimator):
             model_type=checkpoint['model_type'],
             hidden_dims=tuple(checkpoint['hidden_dims']),
             feature_type=checkpoint.get('features', 'A'),
+            n_components=checkpoint.get('n_components', 16),
             dropout=checkpoint['dropout'],
             batch_norm=checkpoint.get('batch_norm', False),
             layer_norm=checkpoint.get('layer_norm', False),
