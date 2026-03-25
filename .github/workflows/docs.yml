@@ -29,6 +29,8 @@ jobs:
 
       - name: Build Jupyter Book
         run: uv run jupyter-book build --html --ci
+        env:
+          BASE_URL: /nocd
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
