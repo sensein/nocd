@@ -32,8 +32,12 @@ def train_main():
     parser.add_argument('--stochastic-loss', action='store_true', default=True)
     parser.add_argument('--batch-size', type=int, default=20000)
     parser.add_argument('--patience', type=int, default=10)
-    parser.add_argument('--features', type=str, default='X', choices=['X', 'A', 'AX'],
-                        help='Feature type: X (attributes), A (adjacency), AX (both)')
+    parser.add_argument('--features', type=str, default='X',
+                        choices=['X', 'A', 'AX', 'structural', 'spectral'],
+                        help='Feature type: X (attributes), A (adjacency), AX (both), '
+                             'structural (topology), spectral (Laplacian eigenvectors)')
+    parser.add_argument('--n-components', type=int, default=16,
+                        help='Number of spectral components (only for --features spectral)')
     parser.add_argument('--threshold', type=float, default=0.5)
     parser.add_argument('--output', type=str, default='checkpoints/nocd_model.pt',
                         help='Output checkpoint path')
@@ -52,6 +56,7 @@ def train_main():
         model_type=args.model,
         hidden_dims=tuple(args.hidden_dims),
         feature_type=args.features,
+        n_components=args.n_components,
         dropout=args.dropout,
         lr=args.lr,
         weight_decay=args.weight_decay,
