@@ -11,7 +11,8 @@ uv.lock
 predictions*.npz
 predictions*.json
 communities.png
-
+_build/
+.claude/
 
 # Latex
 paper/*/main.pdf

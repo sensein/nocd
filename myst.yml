@@ -1,0 +1,17 @@
+version: 1
+project:
+  title: NOCD - Neural Overlapping Community Detection
+  github: https://github.com/sensein/nocd
+  license: MIT
+  toc:
+    - file: docs/intro.md
+    - file: docs/original_demo.ipynb
+    - file: docs/features_demo.ipynb
+  execute:
+    enabled: false
+
+site:
+  template: book-theme
+  options:
+    favicon: ""
+    logo: ""
