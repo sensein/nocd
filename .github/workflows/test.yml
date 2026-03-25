@@ -2,9 +2,8 @@ name: Tests
 
 on:
   push:
-    branches: [main, "modernize-*"]
-  pull_request:
     branches: [main]
+  pull_request:
 
 jobs:
   test:
@@ -32,33 +31,36 @@ jobs:
         run: uv run python -c "from nocd import NOCD; print('NOCD imported successfully')"
 
       - name: Test data loading
-        run: uv run python -c "
+        run: |
+          uv run python -c "
           from nocd.data import load_dataset, load_graph, prepare_features
           g = load_dataset('data/mag_cs.npz')
           A, X, Z = g['A'], g['X'], g['Z']
-          print(f'Nodes: {A.shape[0]}, Features: {X.shape[1]}, Communities: {Z.shape[1]}')
+          print('Nodes:', A.shape[0], 'Features:', X.shape[1], 'Communities:', Z.shape[1])
           A2, X2, Z2 = load_graph('data/mag_cs.npz')
           assert A2.shape == A.shape
           x = prepare_features(A, X, 'X')
-          print(f'Feature tensor shape: {x.shape}')
+          print('Feature tensor shape:', x.shape)
           "
 
       - name: Test model construction
-        run: uv run python -c "
+        run: |
+          uv run python -c "
           from nocd.nn import build_gnn, build_edge_index, infer
           from nocd.data import load_dataset, prepare_features
           g = load_dataset('data/mag_cs.npz')
           A, X, Z = g['A'], g['X'], g['Z']
           x = prepare_features(A, X, 'X')
-          gnn = build_gnn('improved', x.shape[1], [64], Z.shape[1])
-          ei, ew = build_edge_index('improved', A)
+          gnn = build_gnn('gcn', x.shape[1], [64], Z.shape[1], batch_norm=True)
+          ei, ew = build_edge_index('gcn', A)
           z = infer(gnn, x, ei, ew)
-          print(f'Output shape: {z.shape}')
+          print('Output shape:', z.shape)
           assert z.shape == Z.shape
           "
 
       - name: Test NOCD fit (short)
-        run: uv run python -c "
+        run: |
+          uv run python -c "
           from nocd import NOCD
           from nocd.data import load_dataset
           g = load_dataset('data/mag_cs.npz')
@@ -67,12 +69,13 @@ jobs:
           model.fit(A, X, y=Z)
           Z_pred = model.predict(A, X)
           Z_soft = model.predict_proba(A, X)
-          print(f'Predict shape: {Z_pred.shape}, Proba shape: {Z_soft.shape}')
+          print('Predict shape:', Z_pred.shape, 'Proba shape:', Z_soft.shape)
           assert Z_pred.shape == Z.shape
           "
 
       - name: Test save/load
-        run: uv run python -c "
+        run: |
+          uv run python -c "
           from nocd import NOCD
           from nocd.data import load_dataset
           import numpy as np
@@ -89,19 +92,19 @@ jobs:
           "
 
       - name: Test metrics
-        run: uv run python -c "
+        run: |
+          uv run python -c "
           from nocd.metrics import overlapping_nmi, symmetric_jaccard, evaluate_unsupervised
           from nocd.data import load_dataset
-          import numpy as np
           g = load_dataset('data/mag_cs.npz')
           Z = g['Z']
           nmi = overlapping_nmi(Z, Z)
-          print(f'Self-NMI: {nmi:.4f}')
+          print('Self-NMI:', round(nmi, 4))
           assert nmi > 0.99
           jac = symmetric_jaccard(Z, Z)
-          print(f'Self-Jaccard: {jac:.4f}')
+          print('Self-Jaccard:', round(jac, 4))
           assert jac > 0.99
           A = g['A']
           m = evaluate_unsupervised(Z, A)
-          print(f'Unsupervised metrics: {m}')
+          print('Unsupervised metrics:', m)
           "
