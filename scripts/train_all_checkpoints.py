@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""Train all checkpoint variants and generate Croissant metadata."""
+"""Train transferable checkpoints and generate Croissant metadata.
+
+Ships only domain-agnostic checkpoints (structural/spectral features)
+trained on the largest dataset (mag_med). X-feature checkpoints are
+trained for comparison but not committed to the repo.
+"""
 
 import hashlib
 import json
@@ -8,25 +13,35 @@ from datetime import date
 
 from nocd import NOCD
 from nocd.data import load_dataset
-from nocd.metrics import overlapping_nmi
+from nocd.metrics import overlapping_nmi, evaluate_unsupervised
 
-DATASET = "data/mag_cs.npz"
 OUTDIR = "checkpoints"
 
-CONFIGS = [
-    {"model_type": "gcn", "feature_type": "X", "hidden_dims": (128,), "batch_norm": True},
+DATASETS = {
+    "mag_cs": "data/mag_cs.npz",
+    "mag_chem": "data/mag_chem.npz",
+    "mag_eng": "data/mag_eng.npz",
+    "mag_med": "data/mag_med.npz",
+}
+
+# Domain-agnostic features trained on the largest dataset
+AGNOSTIC_DATASET = "mag_med"
+
+# Shipped checkpoints: domain-agnostic features on largest dataset
+SHIPPED_CONFIGS = [
     {"model_type": "gcn", "feature_type": "structural", "hidden_dims": (64, 32), "batch_norm": True},
     {"model_type": "gcn", "feature_type": "spectral", "hidden_dims": (64, 32), "batch_norm": True, "n_components": 32},
-    {"model_type": "improved", "feature_type": "X", "hidden_dims": (128,), "layer_norm": False},
-    {"model_type": "improved", "feature_type": "structural", "hidden_dims": (64, 32), "layer_norm": False},
-    {"model_type": "improved", "feature_type": "spectral", "hidden_dims": (64, 32), "layer_norm": False, "n_components": 32},
 ]
 
+# Comparison-only: X features on each dataset (not shipped)
+COMPARISON_CONFIG = {"model_type": "gcn", "feature_type": "X", "hidden_dims": (128,), "batch_norm": True}
 
-def checkpoint_name(cfg):
-    name = f"nocd-{cfg['model_type']}-{cfg['feature_type']}"
-    if cfg["feature_type"] == "spectral":
-        name += f"-k{cfg.get('n_components', 16)}"
+
+def checkpoint_name(model_type, feature_type, dataset_key, n_components=None):
+    name = f"nocd-{model_type}-{feature_type}"
+    if feature_type == "spectral" and n_components:
+        name += f"-k{n_components}"
+    name += f"-{dataset_key}"
     return name
 
 
@@ -38,7 +53,7 @@ def sha256_file(path):
     return h.hexdigest()
 
 
-def make_croissant(name, path, cfg, nmi, n_nodes, n_edges, n_communities):
+def make_croissant(name, path, cfg, dataset_key, nmi, unsup, n_nodes, n_edges, n_communities):
     return {
         "@context": {
             "@vocab": "https://schema.org/",
@@ -52,7 +67,7 @@ def make_croissant(name, path, cfg, nmi, n_nodes, n_edges, n_communities):
         "description": (
             f"Pretrained NOCD checkpoint ({cfg['model_type']} model, "
             f"{cfg['feature_type']} features) for overlapping community detection. "
-            f"Trained on Microsoft Academic Graph (Computer Science)."
+            f"Trained on Microsoft Academic Graph ({dataset_key})."
         ),
         "license": "https://opensource.org/licenses/MIT",
         "url": f"https://github.com/sensein/nocd/tree/main/checkpoints/{name}.pt",
@@ -75,8 +90,8 @@ def make_croissant(name, path, cfg, nmi, n_nodes, n_edges, n_communities):
         ],
         "cr:trainedOn": {
             "@type": "sc:Dataset",
-            "name": "mag_cs",
-            "description": "Microsoft Academic Graph - Computer Science co-authorship network",
+            "name": dataset_key,
+            "description": f"Microsoft Academic Graph - {dataset_key} co-authorship network",
             "sc:numberOfNodes": n_nodes,
             "sc:numberOfEdges": n_edges,
             "sc:numberOfCommunities": n_communities,
@@ -88,58 +103,95 @@ def make_croissant(name, path, cfg, nmi, n_nodes, n_edges, n_communities):
         "cr:layerNorm": cfg.get("layer_norm", False),
         "cr:dropout": 0.5,
         "cr:nComponents": cfg.get("n_components", None),
-        "cr:overlappingNMI": round(float(nmi), 4),
+        "cr:metrics": {
+            "overlappingNMI": round(float(nmi), 4),
+            "coverage": round(float(unsup["coverage"]), 4),
+            "conductance": round(float(unsup["conductance"]), 4),
+            "density": round(float(unsup["density"]), 4),
+        },
     }
+
+
+def train_one(cfg, dataset_key, dataset_path, save=True):
+    graph = load_dataset(dataset_path)
+    A, X, Z_gt = graph["A"], graph["X"], graph["Z"]
+    N, K = Z_gt.shape
+
+    name = checkpoint_name(
+        cfg["model_type"], cfg["feature_type"], dataset_key,
+        n_components=cfg.get("n_components"),
+    )
+    pt_path = os.path.join(OUTDIR, f"{name}.pt")
+    json_path = os.path.join(OUTDIR, f"{name}.json")
+
+    print(f"\n{'='*60}")
+    print(f"Training: {name}")
+    print(f"  Dataset: {dataset_path} ({N} nodes, {A.nnz} edges, {K} communities)")
+    print(f"{'='*60}")
+
+    model = NOCD(
+        num_communities=K,
+        max_epochs=500,
+        patience=10,
+        display_step=50,
+        balance_loss=True,
+        stochastic_loss=True,
+        batch_size=20000,
+        dropout=0.5,
+        lr=1e-3,
+        weight_decay=1e-2,
+        **cfg,
+    )
+    model.fit(A, X, y=Z_gt)
+
+    Z_pred = model.predict(A, X if cfg["feature_type"] == "X" else None)
+    nmi = overlapping_nmi(Z_pred, Z_gt)
+    unsup = evaluate_unsupervised(Z_pred, A)
+    print(f"Final NMI: {nmi:.4f}, Coverage: {unsup['coverage']:.4f}")
+
+    if save:
+        model.save(pt_path)
+        croissant = make_croissant(name, pt_path, cfg, dataset_key, nmi, unsup, N, A.nnz, K)
+        with open(json_path, "w") as f:
+            json.dump(croissant, f, indent=2)
+        print(f"Saved: {pt_path}")
+
+    return name, nmi, unsup
 
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
 
-    graph = load_dataset(DATASET)
-    A, X, Z_gt = graph["A"], graph["X"], graph["Z"]
-    N, K = Z_gt.shape
+    # Clean old checkpoints
+    for f in os.listdir(OUTDIR):
+        if f.startswith("nocd-") and (f.endswith(".pt") or f.endswith(".json")):
+            os.remove(os.path.join(OUTDIR, f))
 
-    for cfg in CONFIGS:
-        name = checkpoint_name(cfg)
-        pt_path = os.path.join(OUTDIR, f"{name}.pt")
-        json_path = os.path.join(OUTDIR, f"{name}.json")
+    results = []
 
-        print(f"\n{'='*60}")
-        print(f"Training: {name}")
-        print(f"{'='*60}")
+    # 1. Shipped checkpoints: domain-agnostic on largest dataset
+    print("\n" + "=" * 60)
+    print("SHIPPED CHECKPOINTS (domain-agnostic, transferable)")
+    print("=" * 60)
+    for cfg in SHIPPED_CONFIGS:
+        name, nmi, unsup = train_one(cfg, AGNOSTIC_DATASET, DATASETS[AGNOSTIC_DATASET], save=True)
+        results.append((name, nmi, unsup, True))
 
-        model = NOCD(
-            num_communities=K,
-            max_epochs=500,
-            patience=10,
-            display_step=50,
-            balance_loss=True,
-            stochastic_loss=True,
-            batch_size=20000,
-            dropout=0.5,
-            lr=1e-3,
-            weight_decay=1e-2,
-            **cfg,
-        )
-        model.fit(A, X, y=Z_gt)
+    # 2. Comparison: X features on each dataset (not shipped)
+    print("\n" + "=" * 60)
+    print("COMPARISON CHECKPOINTS (X features, not shipped)")
+    print("=" * 60)
+    for ds_key, ds_path in DATASETS.items():
+        name, nmi, unsup = train_one(COMPARISON_CONFIG, ds_key, ds_path, save=False)
+        results.append((name, nmi, unsup, False))
 
-        Z_pred = model.predict(A, X)
-        nmi = overlapping_nmi(Z_pred, Z_gt)
-        print(f"Final NMI: {nmi:.4f}")
-
-        model.save(pt_path)
-        print(f"Saved: {pt_path}")
-
-        croissant = make_croissant(name, pt_path, cfg, nmi, N, A.nnz, K)
-        with open(json_path, "w") as f:
-            json.dump(croissant, f, indent=2)
-        print(f"Saved: {json_path}")
-
-    # Remove old generic checkpoint
-    old = os.path.join(OUTDIR, "nocd_model.pt")
-    if os.path.exists(old):
-        os.remove(old)
-        print(f"\nRemoved old checkpoint: {old}")
+    # Summary
+    print(f"\n{'='*80}")
+    print(f"{'Checkpoint':<45} {'Ship':>5} {'NMI':>8} {'Cov':>8} {'Cond':>8}")
+    print(f"{'-'*80}")
+    for name, nmi, unsup, shipped in results:
+        tag = "  Y" if shipped else "  -"
+        print(f"{name:<45} {tag:>5} {nmi:>8.4f} {unsup['coverage']:>8.4f} {unsup['conductance']:>8.4f}")
 
 
 if __name__ == "__main__":

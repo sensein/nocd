@@ -40,6 +40,6 @@ def collate_fn(batch):
     edges, nonedges = batch[0]
     return (edges, nonedges)
 
-def get_edge_sampler(A, num_pos=1000, num_neg=1000, num_workers=2):
+def get_edge_sampler(A, num_pos=1000, num_neg=1000, num_workers=0):
     data_source = EdgeSampler(A, num_pos, num_neg)
     return data_utils.DataLoader(data_source, num_workers=num_workers, collate_fn=collate_fn)

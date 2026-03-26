@@ -136,33 +136,41 @@ Included in `data/`:
 
 ## Pretrained Checkpoints
 
-Six pretrained checkpoints are provided in `checkpoints/`, covering all
-combinations of model type and feature type. Each checkpoint has an
-accompanying [ML Croissant](https://mlcommons.org/working-groups/data/croissant/)
-JSON-LD metadata file.
+Two domain-agnostic checkpoints are shipped in `checkpoints/`, trained on the
+largest available dataset (`mag_med`, 63K nodes, 1.6M edges). These use
+fixed-dimensional features and can be applied to **any graph** regardless of
+domain or size. Each has an accompanying
+[ML Croissant](https://mlcommons.org/working-groups/data/croissant/) JSON-LD
+metadata file.
 
-Naming scheme: `nocd-{model}-{features}[-k{n_components}].pt`
+Naming scheme: `nocd-{model}-{features}[-k{n}]-{dataset}.pt`
 
-| Checkpoint | Model | Features | NMI | Coverage | Conductance |
-|---|---|---|---|---|---|
-| `nocd-gcn-X.pt` | GCN + BatchNorm | Node attributes (X) | **0.48** | 0.93 | 0.22 |
-| `nocd-gcn-spectral-k32.pt` | GCN + BatchNorm | Spectral (k=32) | 0.09 | 0.32 | 0.38 |
-| `nocd-gcn-structural.pt` | GCN + BatchNorm | Structural (9-dim) | 0.00 | 0.85 | 0.35 |
-| `nocd-improved-X.pt` | ImprovedGCN | Node attributes (X) | 0.27 | 0.81 | 0.26 |
-| `nocd-improved-spectral-k32.pt` | ImprovedGCN | Spectral (k=32) | 0.00 | 0.20 | 0.65 |
-| `nocd-improved-structural.pt` | ImprovedGCN | Structural (9-dim) | 0.00 | 0.89 | 0.06 |
+| Checkpoint | Features | Input dim | NMI | Coverage |
+|---|---|---|---|---|
+| `nocd-gcn-structural-mag_med.pt` | Structural | 9 | 0.02 | 0.85 |
+| `nocd-gcn-spectral-k32-mag_med.pt` | Spectral (k=32) | 32 | 0.06 | 0.60 |
 
-All trained on `data/mag_cs.npz` (21,957 nodes, 193,500 edges, 18 communities).
-Device: MPS (Apple Silicon), Python 3.14, PyTorch 2.11, PyG 2.7.
+> **Note:** Domain-specific checkpoints (feature_type=X) achieve much higher NMI
+> but are not shipped because they require the exact same feature matrix as the
+> training dataset and are not transferable. See the comparison table below.
 
-**Key findings:**
-- GCN + BatchNorm with node attributes achieves the best NMI (~0.48), matching the original paper
-- Structural and spectral features find real community structure (high coverage) but the
-  communities don't align with ground-truth labels (low NMI) — this is expected since
-  topology-only features lack the domain-specific signal in the keyword attributes
-- The `structural` and `spectral` feature types enable cross-graph transfer (fixed input dim)
-- Coverage and conductance show the models are finding meaningful graph partitions
-  even when NMI is low
+### Benchmark: model x features x dataset
+
+Results from training GCN + BatchNorm across all MAG datasets and feature types
+(NMI measured against ground-truth keyword-based community labels):
+
+| Dataset | Nodes | Edges | K | X features | Structural | Spectral (k=32) |
+|---|---|---|---|---|---|---|
+| mag_cs | 21,957 | 193,500 | 18 | **0.45** | — | — |
+| mag_chem | 35,409 | 314,716 | 14 | **0.41** | — | — |
+| mag_eng | 14,927 | 98,610 | 16 | **0.41** | — | — |
+| mag_med | 63,282 | 1,620,628 | 17 | **0.35** | 0.02 | 0.06 |
+
+Structural/spectral features find real topological communities (high coverage,
+reasonable conductance) but these don't align with the ground-truth keyword labels —
+expected since topology alone can't recover domain-specific community semantics.
+The shipped checkpoints are useful for discovering structural communities in
+arbitrary graphs where no domain features exist.
 
 To regenerate all checkpoints: `uv run python scripts/train_all_checkpoints.py`
 

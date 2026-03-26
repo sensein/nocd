@@ -1,0 +1,55 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "dct": "http://purl.org/dc/terms/"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.0",
+  "name": "nocd-gcn-structural-mag_med",
+  "description": "Pretrained NOCD checkpoint (gcn model, structural features) for overlapping community detection. Trained on Microsoft Academic Graph (mag_med).",
+  "license": "https://opensource.org/licenses/MIT",
+  "url": "https://github.com/sensein/nocd/tree/main/checkpoints/nocd-gcn-structural-mag_med.pt",
+  "creator": {
+    "@type": "Organization",
+    "name": "sensein",
+    "url": "https://github.com/sensein"
+  },
+  "datePublished": "2026-03-25",
+  "version": "0.2.0",
+  "distribution": [
+    {
+      "@type": "cr:FileObject",
+      "@id": "nocd-gcn-structural-mag_med.pt",
+      "name": "nocd-gcn-structural-mag_med.pt",
+      "contentUrl": "nocd-gcn-structural-mag_med.pt",
+      "encodingFormat": "application/x-pytorch",
+      "sha256": "8ac4069e7b2107aeed804bb3c4eb9585380f0d431039db9675bcfa1a7743db71"
+    }
+  ],
+  "cr:trainedOn": {
+    "@type": "sc:Dataset",
+    "name": "mag_med",
+    "description": "Microsoft Academic Graph - mag_med co-authorship network",
+    "sc:numberOfNodes": 63282,
+    "sc:numberOfEdges": 1620628,
+    "sc:numberOfCommunities": 17
+  },
+  "cr:modelArchitecture": "gcn",
+  "cr:featureType": "structural",
+  "cr:hiddenDims": [
+    64,
+    32
+  ],
+  "cr:batchNorm": true,
+  "cr:layerNorm": false,
+  "cr:dropout": 0.5,
+  "cr:nComponents": null,
+  "cr:metrics": {
+    "overlappingNMI": 0.0166,
+    "coverage": 0.8491,
+    "conductance": 0.3319,
+    "density": 0.0035
+  }
+}
