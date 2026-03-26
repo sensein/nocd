@@ -14,11 +14,15 @@ def train_main():
     parser = argparse.ArgumentParser(description='Train NOCD model')
     parser.add_argument('--dataset', type=str, default='data/mag_cs.npz',
                         help='Path to dataset .npz file')
-    parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'improved'],
+    parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'improved', 'gat'],
                         help='GNN model type')
     parser.add_argument('--hidden-dims', type=int, nargs='+', default=[128],
                         help='Hidden layer dimensions')
     parser.add_argument('--dropout', type=float, default=0.5)
+    parser.add_argument('--heads', type=int, default=4,
+                        help='Number of attention heads (GAT only)')
+    parser.add_argument('--attn-dropout', type=float, default=0.3,
+                        help='Attention dropout (GAT only)')
     parser.add_argument('--batch-norm', action='store_true', default=True)
     parser.add_argument('--layer-norm', action='store_true')
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -55,6 +59,8 @@ def train_main():
         feature_type=args.features,
         n_components=args.n_components,
         dropout=args.dropout,
+        heads=args.heads,
+        attn_dropout=args.attn_dropout,
         lr=args.lr,
         weight_decay=args.weight_decay,
         max_epochs=args.max_epochs,

@@ -29,7 +29,7 @@ class NOCD(BaseEstimator):
     num_communities : int
         Number of communities to detect.
     model_type : str, default='improved'
-        GNN variant: 'improved' or 'gcn'.
+        GNN variant: 'gcn', 'improved', or 'gat'.
     hidden_dims : list of int, default=(128,)
         Hidden layer sizes.
     feature_type : str, default='X'
@@ -39,6 +39,10 @@ class NOCD(BaseEstimator):
         Number of spectral components (only used when feature_type='spectral').
     dropout : float, default=0.5
         Dropout rate.
+    heads : int, default=4
+        Number of attention heads (GAT only).
+    attn_dropout : float, default=0.3
+        Dropout on attention coefficients (GAT only).
     lr : float, default=1e-3
         Learning rate.
     weight_decay : float, default=1e-2
@@ -84,6 +88,8 @@ class NOCD(BaseEstimator):
         feature_type='X',
         n_components=16,
         dropout=0.5,
+        heads=4,
+        attn_dropout=0.3,
         lr=1e-3,
         weight_decay=1e-2,
         max_epochs=500,
@@ -103,6 +109,8 @@ class NOCD(BaseEstimator):
         self.feature_type = feature_type
         self.n_components = n_components
         self.dropout = dropout
+        self.heads = heads
+        self.attn_dropout = attn_dropout
         self.lr = lr
         self.weight_decay = weight_decay
         self.max_epochs = max_epochs
@@ -161,6 +169,7 @@ class NOCD(BaseEstimator):
         gnn = build_gnn(
             self.model_type, self.n_features_in_, hidden_dims, self.num_communities,
             dropout=self.dropout, layer_norm=self.layer_norm, batch_norm=self.batch_norm,
+            heads=self.heads, attn_dropout=self.attn_dropout,
         ).to(device)
         edge_index, edge_weight = build_edge_index(self.model_type, A, device=device)
 
@@ -315,6 +324,8 @@ class NOCD(BaseEstimator):
             'hidden_dims': [int(d) for d in self.hidden_dims],
             'output_dim': int(self.num_communities),
             'dropout': float(self.dropout),
+            'heads': int(self.heads),
+            'attn_dropout': float(self.attn_dropout),
             'batch_norm': bool(self.batch_norm),
             'layer_norm': bool(self.layer_norm),
             'balance_loss': bool(self.balance_loss),
@@ -350,6 +361,8 @@ class NOCD(BaseEstimator):
             feature_type=checkpoint.get('features', 'A'),
             n_components=checkpoint.get('n_components', 16),
             dropout=checkpoint['dropout'],
+            heads=checkpoint.get('heads', 4),
+            attn_dropout=checkpoint.get('attn_dropout', 0.3),
             batch_norm=checkpoint.get('batch_norm', False),
             layer_norm=checkpoint.get('layer_norm', False),
             balance_loss=checkpoint.get('balance_loss', True),
@@ -361,6 +374,7 @@ class NOCD(BaseEstimator):
             model.model_type, checkpoint['input_dim'], list(model.hidden_dims),
             model.num_communities,
             dropout=model.dropout, layer_norm=model.layer_norm, batch_norm=model.batch_norm,
+            heads=model.heads, attn_dropout=model.attn_dropout,
         )
         gnn.load_state_dict(checkpoint['model_state_dict'])
         gnn = gnn.to(dev)

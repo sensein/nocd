@@ -1,4 +1,5 @@
 from .decoder import *
+from .gat import *
 from .gcn import *
 from .imrpoved_gcn import *
 
@@ -12,7 +13,7 @@ def build_gnn(model_type, input_dim, hidden_dims, output_dim, **kwargs):
     Parameters
     ----------
     model_type : str
-        'improved' or 'gcn'.
+        'gcn', 'improved', or 'gat'.
     input_dim : int
         Input feature dimension.
     hidden_dims : list of int
@@ -20,7 +21,8 @@ def build_gnn(model_type, input_dim, hidden_dims, output_dim, **kwargs):
     output_dim : int
         Number of output communities.
     **kwargs :
-        Additional keyword arguments (dropout, layer_norm, batch_norm).
+        Additional keyword arguments (dropout, batch_norm, layer_norm,
+        heads, attn_dropout).
 
     Returns
     -------
@@ -31,6 +33,14 @@ def build_gnn(model_type, input_dim, hidden_dims, output_dim, **kwargs):
             input_dim, hidden_dims, output_dim,
             dropout=kwargs.get('dropout', 0.5),
             layer_norm=kwargs.get('layer_norm', False),
+        )
+    elif model_type == 'gat':
+        return GAT(
+            input_dim, hidden_dims, output_dim,
+            heads=kwargs.get('heads', 4),
+            dropout=kwargs.get('dropout', 0.5),
+            attn_dropout=kwargs.get('attn_dropout', 0.3),
+            batch_norm=kwargs.get('batch_norm', False),
         )
     else:
         return GCN(
@@ -46,7 +56,7 @@ def build_edge_index(model_type, adj, device=None):
     Parameters
     ----------
     model_type : str
-        'improved' or 'gcn'.
+        'gcn', 'improved', or 'gat'.
     adj : scipy.sparse matrix
         Adjacency matrix.
     device : torch.device or None
@@ -54,10 +64,12 @@ def build_edge_index(model_type, adj, device=None):
     Returns
     -------
     edge_index : torch.LongTensor
-    edge_weight : torch.FloatTensor
+    edge_weight : torch.FloatTensor or None
     """
     if model_type == 'improved':
         return ImprovedGCN.build_edge_index(adj, device=device)
+    elif model_type == 'gat':
+        return GAT.build_edge_index(adj, device=device)
     else:
         return GCN.build_edge_index(adj, device=device)
 
